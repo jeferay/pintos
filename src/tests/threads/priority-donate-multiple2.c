@@ -24,6 +24,8 @@ static thread_func a_thread_func;
 static thread_func b_thread_func;
 static thread_func c_thread_func;
 
+
+//这个测试的关键是得到失去优先级之后，立刻重新调度（yield）
 void
 test_priority_donate_multiple2 (void) 
 {

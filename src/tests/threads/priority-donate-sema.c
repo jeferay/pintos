@@ -26,6 +26,7 @@ static thread_func l_thread_func;
 static thread_func m_thread_func;
 static thread_func h_thread_func;
 
+//同时考虑了信号量和锁，维持原有的donate机制
 void
 test_priority_donate_sema (void) 
 {
@@ -38,7 +39,7 @@ test_priority_donate_sema (void)
   ASSERT (thread_get_priority () == PRI_DEFAULT);
 
   lock_init (&ls.lock);
-  sema_init (&ls.sema, 0);
+  sema_init (&ls.sema, 0);//同时包含锁和信号量的同步机制，从而实现条件变量
   thread_create ("low", PRI_DEFAULT + 1, l_thread_func, &ls);
   thread_create ("med", PRI_DEFAULT + 3, m_thread_func, &ls);
   thread_create ("high", PRI_DEFAULT + 5, h_thread_func, &ls);

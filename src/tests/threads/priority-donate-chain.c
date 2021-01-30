@@ -41,6 +41,7 @@ struct lock_pair
 static thread_func donor_thread_func;
 static thread_func interloper_thread_func;
 
+//实质上依然是测试nest的情况，注意release lock之后被抢占
 void
 test_priority_donate_chain (void) 
 {
@@ -59,22 +60,22 @@ test_priority_donate_chain (void)
   lock_acquire (&locks[0]);
   msg ("%s got lock.", thread_name ());
 
-  for (i = 1; i < NESTING_DEPTH; i++)
+  for (i = 1; i < NESTING_DEPTH; i++)//新创建depth-1个线程（7个）
     {
       char name[16];
       int thread_priority;
 
-      snprintf (name, sizeof name, "thread %d", i);
+      snprintf (name, sizeof name, "thread %d", i);//执行的是复制功能
       thread_priority = PRI_MIN + i * 3;
-      lock_pairs[i].first = i < NESTING_DEPTH - 1 ? locks + i: NULL;
-      lock_pairs[i].second = locks + i - 1;
+      lock_pairs[i].first = i < NESTING_DEPTH - 1 ? locks + i: NULL;//与标号相同
+      lock_pairs[i].second = locks + i - 1;//比标号减一
 
       thread_create (name, thread_priority, donor_thread_func, lock_pairs + i);
       msg ("%s should have priority %d.  Actual priority: %d.",
           thread_name (), thread_priority, thread_get_priority ());
 
       snprintf (name, sizeof name, "interloper %d", i);
-      thread_create (name, thread_priority - 1, interloper_thread_func, NULL);
+      thread_create (name, thread_priority - 1, interloper_thread_func, NULL);//因为优先级较低，所以暂时不执行
     }
 
   lock_release (&locks[0]);
@@ -87,18 +88,18 @@ donor_thread_func (void *locks_)
 {
   struct lock_pair *locks = locks_;
 
-  if (locks->first)
-    lock_acquire (locks->first);
+  if (locks->first)//所有的线程都先得到与之对应的first lock
+    lock_acquire (locks->first); 
 
-  lock_acquire (locks->second);
+  lock_acquire (locks->second);//每个线程的first同时是前一个线程的second
   msg ("%s got lock", thread_name ());
 
-  lock_release (locks->second);
+  lock_release (locks->second);//得到后也就释放了，作为后续操作
   msg ("%s should have priority %d. Actual priority: %d", 
         thread_name (), (NESTING_DEPTH - 1) * 3,
         thread_get_priority ());
 
-  if (locks->first)
+  if (locks->first)//释放first,那么下一个线程可以得到second,因为优先级下降，所以被立刻调度
     lock_release (locks->first);
 
   msg ("%s finishing with priority %d.", thread_name (),

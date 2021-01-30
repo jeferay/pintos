@@ -18,6 +18,8 @@
 static thread_func a_thread_func;
 static thread_func b_thread_func;
 
+//有多个锁的情况，当有别的线程得到锁的时候要提升优先级，release的时候要降低优先级
+//实现的思路可以是每释放一个锁，将优先级恢复到得到这个锁之前的状态，所以线程必然包含一个记录的方式
 void
 test_priority_donate_multiple (void) 
 {

@@ -18,7 +18,6 @@
 static thread_func acquire1_thread_func;
 static thread_func acquire2_thread_func;
 
-//该测试要求实现donate，基本思路是获得锁的同时，如果该锁已经被获得，检查是否提升优先级，获得完成之后又要恢复原来持有锁的线程的优先级
 void
 test_priority_donate_one (void) 
 {
@@ -39,7 +38,6 @@ test_priority_donate_one (void)
   msg ("This thread should have priority %d.  Actual priority: %d.",
        PRI_DEFAULT + 2, thread_get_priority ());
   lock_release (&lock);
-  msg("system thread priority should be 31, acutual priority %d", thread_get_priority());
   msg ("acquire2, acquire1 must already have finished, in that order.");
   msg ("This should be the last line before finishing this test.");
 }
@@ -48,6 +46,7 @@ static void
 acquire1_thread_func (void *lock_) 
 {
   struct lock *lock = lock_;
+
   lock_acquire (lock);
   msg ("acquire1: got the lock");
   lock_release (lock);

@@ -24,8 +24,6 @@ struct locks
 static thread_func medium_thread_func;
 static thread_func high_thread_func;
 
-//这里要测试的时候donate传递的情况，也就是当high被medium lock,medium被low lock,则low获得high 优先级，同时要顾及到如何恢复的问题
-//要给线程增加一个数据结构，可以记住哪个锁被哪个线程锁住
 void
 test_priority_donate_nest (void) 
 {

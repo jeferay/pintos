@@ -12,8 +12,6 @@
 static thread_func priority_sema_thread;
 static struct semaphore sema;
 
-
-//根据输出可以发现，要求实现一个优先级队列
 void
 test_priority_sema (void) 
 {

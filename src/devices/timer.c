@@ -24,6 +24,9 @@ static int64_t ticks;
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 
+/* Threads waiting in timer_sleep(). */
+static struct list wait_list;
+
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
@@ -37,15 +40,17 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+
+  list_init (&wait_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
 void
-timer_calibrate (void) //较准时间
+timer_calibrate (void) 
 {
   unsigned high_bit, test_bit;
 
-  ASSERT (intr_get_level () == INTR_ON);//返回当前中断状态是可以被中断的
+  ASSERT (intr_get_level () == INTR_ON);
   printf ("Calibrating timer...  ");
 
   /* Approximate loops_per_tick as the largest power-of-two
@@ -60,51 +65,61 @@ timer_calibrate (void) //较准时间
   /* Refine the next 8 bits of loops_per_tick. */
   high_bit = loops_per_tick;
   for (test_bit = high_bit >> 1; test_bit != high_bit >> 10; test_bit >>= 1)
-    if (!too_many_loops (loops_per_tick | test_bit))
+    if (!too_many_loops (high_bit | test_bit))
       loops_per_tick |= test_bit;
 
   printf ("%'"PRIu64" loops/s.\n", (uint64_t) loops_per_tick * TIMER_FREQ);
 }
 
 /* Returns the number of timer ticks since the OS booted. */
-//返回自开启os之后的时间ticks的数量
 int64_t
 timer_ticks (void) 
 {
   enum intr_level old_level = intr_disable ();
   int64_t t = ticks;
-  intr_set_level (old_level);//恢复原先的中断状态
+  intr_set_level (old_level);
   return t;
 }
 
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
-//返回since then之后的时间ticks
 int64_t
 timer_elapsed (int64_t then) 
 {
   return timer_ticks () - then;
 }
 
+/* Compares two threads based on their wake-up times. */
+static bool
+compare_threads_by_wakeup_time (const struct list_elem *a_,
+                                const struct list_elem *b_,
+                                void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, timer_elem);
+  const struct thread *b = list_entry (b_, struct thread, timer_elem);
+
+  return a->wakeup_time < b->wakeup_time;
+}
+
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
-//该函数指让线程休眠固定的ticks,然而希望在这段时间内可以放弃cpu（也就是阻塞），而不用循环占着cpu
-//实现思路：给每个线程结构体增加一个变量，记录一个上次休眠到现在被唤醒的剩余的ticks，
-//利用os自己的时间中断，每个时刻检查所有的线程并且更新，等到为0的时候就做唤醒
 void
-timer_sleep (int64_t ticks) //sleep的过程只是不保持不running但是不代表结束之后立刻恢复到running的状态，而是恢复到就绪态
+timer_sleep (int64_t ticks) 
 {
-  if(ticks<=0)return;
+  struct thread *t = thread_current ();
 
-  ASSERT (intr_get_level () == INTR_ON);//确保处于可以中断的状态，否则会一直死循环下去
-  //my code要设置sleep ticks并且block，这样子每个time interrupt会自动检查并且唤醒，
-  //但是注意，这里不可中断，否则可能永远在设置sleep_ticks之前被中断而用于那无法唤醒
-  enum intr_level old_level = intr_disable();
-  struct thread * cur = thread_current();
-  cur->sleep_ticks = ticks;
-  thread_block();
-  intr_set_level(old_level);
-  return;
+  /* Schedule our wake-up time. */
+  t->wakeup_time = timer_ticks () + ticks;
+
+  /* Atomically insert the current thread into the wait list. */
+  ASSERT (intr_get_level () == INTR_ON);
+  intr_disable ();
+  list_insert_ordered (&wait_list, &t->timer_elem,
+                       compare_threads_by_wakeup_time, NULL);
+  intr_enable ();
+
+  /* Wait. */
+  sema_down (&t->timer_sema);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -178,38 +193,21 @@ timer_print_stats (void)
 }
 
 /* Timer interrupt handler. */
-//每个时钟中断会自动增加全局的ticks的数量，也就是自动更新自操作系统开启之后的时间ticks
-//在这里要添加每个tick对所有线程的检查并更新
-
-//时间中断处理函数，一个整体的处理函数
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  enum intr_level old_level = intr_disable();
-  
-  //固定的时间周期更新相关的状态
-  if (thread_mlfqs)
-  {
-	  //每个tick更新一次
-	  thread_mlfqs_update_recent_cpu_for_current_thread_per_tick();
+  thread_tick ();
 
-	  //每秒更新load_avg,和recent_cpu
-	  if (timer_ticks() % TIMER_FREQ == 0)
-	  {
-		  thread_mlfqs_update_load_avg_per_second();
-		  thread_mlfqs_update_recent_cpu_per_second();//先更新load_avg再更新recent_cpu
-	  }
-	  
-	  //每四个tick更新priority,保证此时已经完成了recent_cpu的更新
-	  if (ticks % 4 == 0)
-		  thread_mlfqs_update_priority_every_four_ticks();
-
-
-  }
-  thread_foreach(check_sleep_ticks, NULL);//每个tick检查blocked的情况，注意到只有blocked且sleep_ticks设置为>0才考虑转换为就绪态
-  intr_set_level(old_level);
-  thread_tick ();//处理外部中断信号
+  while (!list_empty (&wait_list))
+    {
+      struct thread *t = list_entry (list_front (&wait_list),
+                                     struct thread, timer_elem);
+      if (ticks < t->wakeup_time) 
+        break;
+      sema_up (&t->timer_sema);
+      list_pop_front (&wait_list);
+    }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

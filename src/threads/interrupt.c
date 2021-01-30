@@ -61,7 +61,6 @@ void intr_handler (struct intr_frame *args);
 static void unexpected_interrupt (const struct intr_frame *);
 
 /* Returns the current interrupt status. */
-//返回当前的中断状态
 enum intr_level
 intr_get_level (void) 
 {
@@ -89,19 +88,18 @@ enum intr_level
 intr_enable (void) 
 {
   enum intr_level old_level = intr_get_level ();
-  ASSERT (!intr_context ());//断言不处于外部中断的处理过程之中
+  ASSERT (!intr_context ());
 
   /* Enable interrupts by setting the interrupt flag.
 
      See [IA32-v2b] "STI" and [IA32-v3a] 5.8.1 "Masking Maskable
      Hardware Interrupts". */
-  asm volatile ("sti");//将IF设置为1
+  asm volatile ("sti");
 
   return old_level;
 }
 
 /* Disables interrupts and returns the previous interrupt status. */
-//设置不允许中断，并返回之前的中断状态
 enum intr_level
 intr_disable (void) 
 {
@@ -110,7 +108,7 @@ intr_disable (void)
   /* Disable interrupts by clearing the interrupt flag.
      See [IA32-v2b] "CLI" and [IA32-v3a] 5.8.1 "Masking Maskable
      Hardware Interrupts". */
-  asm volatile ("cli" : : : "memory");//原子性操作，设置interrupt flag=0，将不响应可屏蔽中断
+  asm volatile ("cli" : : : "memory");
 
   return old_level;
 }
@@ -210,7 +208,6 @@ intr_register_int (uint8_t vec_no, int dpl, enum intr_level level,
 
 /* Returns true during processing of an external interrupt
    and false at all other times. */
-//如果此时处于外部中断的处理之中，则返回为真
 bool
 intr_context (void) 
 {
@@ -363,6 +360,8 @@ intr_handler (struct intr_frame *frame)
       in_external_intr = true;
       yield_on_return = false;
     }
+  else 
+    thread_current ()->user_esp = frame->esp;
 
   /* Invoke the interrupt's handler. */
   handler = intr_handlers[frame->vec_no];

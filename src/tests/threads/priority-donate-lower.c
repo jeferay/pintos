@@ -12,7 +12,6 @@
 
 static thread_func acquire_thread_func;
 
-//此测试要求即使donate期间改变了优先级，仍然保持直到donate的结束，更新为donate期间要被改变的状态，同样是要求thread结构中新增记录成员
 void
 test_priority_donate_lower (void) 
 {

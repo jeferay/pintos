@@ -13,7 +13,6 @@ static thread_func priority_condvar_thread;
 static struct lock lock;
 static struct condition condition;
 
-//同样，实质上要求条件变量的等待队列是一个优先队列
 void
 test_priority_condvar (void) 
 {
@@ -50,5 +49,5 @@ priority_condvar_thread (void *aux UNUSED)
   lock_acquire (&lock);
   cond_wait (&condition, &lock);
   msg ("Thread %s woke up.", thread_name ());
-  lock_release (&lock)}
-
+  lock_release (&lock);
+}

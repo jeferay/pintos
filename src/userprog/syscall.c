@@ -15,6 +15,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "vm/page.h"
+#include "vm/frame.h"
+#include "vm/swap.h"
 
 
 static int sys_halt (void);
@@ -470,28 +472,29 @@ sys_close (int handle)
 }
 
 
-//为mapping构建一个结构体，记录映射关系，从内存到文件
+//为mapping\B9\B9\BD\A8一\B8\F6\BD峁筡CC澹琝BC\C7录映\C9\E4\B9\D8系\A3\AC\B4\D3\C4诖娴絓CE募\FE
 struct mapping
   {
     struct list_elem elem;      /* List element. */
     int handle;                 /* Mapping id. */
-    struct file *file;          //映射到的文件
-    uint8_t *base;              //内存起始地址
-    size_t page_cnt;            //映射到的页面数量
+    struct file *file;          //映\C9涞絓B5\C4\CE募\FE
+    uint8_t *base;              //\C4诖\E6\C6\F0始\B5\D8址
+    size_t page_cnt;            //映\C9涞絓B5\C4页\C3\E6\CA\FD\C1\BF
   };
 
 
-/* 取消映射关系，并且将相关的页面写回到文件之中去 */
+/* 取\CF\FB映\C9\E4\B9\D8系\A3\AC\B2\A2\C7医\AB\CF\E0\B9氐\C4页\C3\E6写\BB氐\BD\CE募\FE之\D6\D0去 */
 static void
 unmap (struct mapping *m)
 {
-  /* 移除掉这个mapping */
+  /* \D2瞥\FD\B5\F4\D5\E2\B8\F6mapping */
   list_remove(&m->elem);
 
-  /*考虑这组映射之中涉及到的每个虚拟页面 */
-  for(int i = 0; i < m->page_cnt; i++)
+  /*\BF\BC\C2\C7\D5\E2\D7\E9映\C9\E4之\D6\D0\C9婕癨B5\BD\B5\C4每\B8\F6\D0\E9\C4\E2页\C3\E6 */
+  int i =0;
+  for(i = 0; i < m->page_cnt; i++)
   {
-    /*通过查询该页面是否为dirty来决定是否写回，注意写回的时候要上锁 */
+    /*通\B9\FD\B2\E9询\B8\C3页\C3\E6\CA欠\F1为dirty\C0\B4\BE\F6\B6\A8\CA欠\F1写\BB兀\AC注\D2\E2写\BB氐\C4时\BA\F2要\C9\CF\CB\F8 */
     if (pagedir_is_dirty(thread_current()->pagedir, ((const void *) ((m->base) + (PGSIZE * i)))))
     {
       lock_acquire (&fs_lock);
@@ -500,14 +503,14 @@ unmap (struct mapping *m)
     }
   }
 
-  /* 最终释放相应的物理页面 */
-  for(int i = 0; i < m->page_cnt; i++)
+  /* \D7\EE\D6\D5\CA头\C5\CF\E0应\B5\C4\CE\EF\C0\ED页\C3\E6 */
+  for(i = 0; i < m->page_cnt; i++)
   {
     page_deallocate((void *) ((m->base) + (PGSIZE * i)));
   }
 }
 
-/* Mmap system call. 构建映射关系 */
+/* Mmap system call. \B9\B9\BD\A8映\C9\E4\B9\D8系 */
 static int
 sys_mmap(int handle, void* addr)
 {
@@ -537,11 +540,11 @@ sys_mmap(int handle, void* addr)
 	length = file_length(m->file);
 	lock_release(&fs_lock);
 
-	//到这里一部分是将相关的映射信息保存到m这个struct之中
+	//\B5\BD\D5\E2\C0\EF一\B2\BF\B7\D6\CA墙\AB\CF\E0\B9氐\C4映\C9\E4\D0\C5息\B1\A3\B4娴絤\D5\E2\B8\F6struct之\D6\D0
 
-	//根据计算出来的file大小，分配对应数量的虚拟页面
-	//注意到此时只是分配了虚拟页面，并没有真正的allocate物理页面
-	//后续在发生page fault的时候才会实际的allocate相应的frame
+	//\B8\F9\BE菁\C6\CB\E3\B3\F6\C0\B4\B5\C4file\B4\F3小\A3\AC\B7\D6\C5\E4\B6\D4应\CA\FD\C1\BF\B5\C4\D0\E9\C4\E2页\C3\E6
+	//注\D2獾絓B4\CB时只\CA欠\D6\C5\E4\C1\CB\D0\E9\C4\E2页\C3妫琝B2\A2没\D3\D0\D5\E6\D5\FD\B5\C4allocate\CE\EF\C0\ED页\C3\E6
+	//\BA\F3\D0\F8\D4诜\A2\C9\FApage fault\B5\C4时\BA\F2\B2呕\E1实\BC实\C4allocate\CF\E0应\B5\C4frame
 	while (length > 0)
 	{
 		struct page* p = page_allocate((uint8_t*)addr + offset, false);
@@ -559,11 +562,11 @@ sys_mmap(int handle, void* addr)
 		m->page_cnt++;
 	}
 
-	return m->handle;//返回一个映射号
+	return m->handle;//\B7\B5\BB\D8一\B8\F6映\C9\E4\BA\C5
 }
 
 
-/* 根据mapping的号码handle查询具体的mapping */
+/* \B8\F9\BE\DDmapping\B5暮\C5\C2\EBhandle\B2\E9询\BE\DF\CC\E5\B5\C4mapping */
 static struct mapping*
 lookup_mapping(int handle)
 {

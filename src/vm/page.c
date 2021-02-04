@@ -9,68 +9,55 @@
 #include "userprog/pagedir.h"
 #include "threads/vaddr.h"
 
+/*
+在实现之前请认真阅读process.c，frame.c和swap.c的逻辑
+*/
+
 /* Maximum size of process stack, in bytes. */
 /* Right now it is 1 megabyte. */
 #define STACK_MAX (1024 * 1024)
 
-/* Destroys a page, which must be in the current process's
-   page table.  Used as a callback for hash_destroy(). */
+/*write codes here and you need to implement following functions*/
+
+/*destroy一个page，检查是否是当前process的page
+*/
 static void
 destroy_page (struct hash_elem *p_, void *aux UNUSED)
 {
-  struct page *p = hash_entry (p_, struct page, hash_elem);
-  frame_lock (p);
-  if (p->frame)
-    frame_free (p->frame);
-  free (p);
+  
 }
 
-/* Destroys the current process's page table. */
+/*write codes here and you need to implement following functions*/
+/* Destroys the current process's page table，利用hash_destory函数 */
 void
 page_exit (void)
 {
-  struct hash *h = thread_current ()->pages;
-  if (h != NULL)
-    hash_destroy (h, destroy_page);
 }
 
+/*write codes here and you need to implement following functions*/
 /* Returns the page containing the given virtual ADDRESS,
    or a null pointer if no such page exists.
    Allocates stack pages as necessary. */
 //返回一个包含虚拟地址addr的页面，如果这个虚拟地址不在栈的增长空间之中则重新分配
+/*
+1.判断当address小与phys_base时：
+2.利用pg_ruond_down找到当前的页面初始地址
+3.根据hash_find函数查找当前页面是否在thread的页表之中（这里再次提示，进程的页表是用hash表组织的，而不是一个数组）
+4.如果返回的结果不是null说明是一个真实分配过的页面，所以直接返回相应的查询结果
+5.否则检查是否是栈增长超过一个页面，需要重新分配：决定是否是访问栈 来决定是否重新分配一个页面（首先没有超过栈的界限 其次是在栈指针的向下32byte范围之内，因为push的最大长度是32）
+*/
 static struct page *
 page_for_addr (const void *address)
 {
-  if (address < PHYS_BASE)
-    {
-      struct page p;
-      struct hash_elem *e;
-
-      /* Find existing page. */
-      p.addr = (void *) pg_round_down (address);
-	  //round到附近的page
-      e = hash_find (thread_current ()->pages, &p.hash_elem);
-	  //如果不是null，说明已经分配过相应的虚拟页面，而只是没有分配实际的物理页面
-      if (e != NULL)
-        return hash_entry (e, struct page, hash_elem);
-	  //并非真的维护一个页表，是用hash来实现地址到页表项的映射
-
-	  //当发现没有分配到一个虚拟页面时，要判断是否是要为栈分配页面
-      /* 决定是否是访问栈 来决定是否重新分配一个页面
-         首先没有超过栈的界限
-         其次是在栈指针的向下32byte范围之内，因为push的最大长度是32
-      */
-      if ((p.addr > PHYS_BASE - STACK_MAX) && ((void *)thread_current()->user_esp - 32 < address))
-      {
-        return page_allocate (p.addr, false);
-      }
-    }
-
+  
   return NULL;
 }
-
+/*write codes here and you need to implement following functions*/
 /* Locks a frame for page P and pages it in.
    Returns true if successful, false on failure. */
+/*
+考虑四种情况：从交换区获取数据；从文件中得到数据；分配全0页面
+*/
 static bool
 do_page_in (struct page *p)
 {
@@ -80,35 +67,33 @@ do_page_in (struct page *p)
     return false;
 
   /* 将已分配的物理页面填充相关内容*/
+  /*write codes here and you need to implement following functions*/
+
+  //从交换区中得到数据 /*write codes here and you need to implement following functions*/
   if (p->sector != (block_sector_t) -1)
     {
-      //从交换区中得到数据
-      swap_in (p);
+
     }
+  //从文件中得到数据
+  /*write codes here and you need to implement following functions*/
   else if (p->file != NULL)
     {
-      //从文件中得到数据
-      off_t read_bytes = file_read_at (p->file, p->frame->base,
-                                        p->file_bytes, p->file_offset);
-      off_t zero_bytes = PGSIZE - read_bytes;
-      memset (p->frame->base + read_bytes, 0, zero_bytes);
-      if (read_bytes != p->file_bytes)
-        printf ("bytes read (%"PROTd") != bytes requested (%"PROTd")\n",
-                read_bytes, p->file_bytes);
+      
     }
-  else
+  else//全0页面 /*write codes here and you need to implement following functions*/
     {
-      //全0页面
-      memset (p->frame->base, 0, PGSIZE);
     }
 
   return true;
 }
 
+/*write codes here and you need to implement following functions*/
 /* Faults in the page containing FAULT_ADDR.
    Returns true if successful, false on failure. */
-//如果是false的话按照和lab2中的相同的方式处理并返回，如果是访问一个合理的位置的pagefault的话
-//重新分配一个页面
+//如果是false的话按照和lab2中的相同的方式处理并返回，如果是访问一个合理的位置的pagefault的话 利用do page in函数重新分配一个页面
+//检查是否分配过一个虚拟页面的方式，用page_for_addr函数检查，如果返回null则表明是一个不能访问的页面，返回fault
+//否则利用do page in函数分配物理页面
+//注意过程中要利用frame lock上锁
 bool
 page_in (void *fault_addr)
 {
@@ -119,32 +104,29 @@ page_in (void *fault_addr)
   if (thread_current ()->pages == NULL)
     return false;
 
-  //p是指向分配页的指针，此时只是有了页表项但是还没有具体分配物理内存
+  //先用page for addr检查
   p = page_for_addr (fault_addr);
   if (p == NULL)
     return false;
 
-  frame_lock (p);
-  if (p->frame == NULL)
-    {
-      if (!do_page_in (p))
-        return false;
-    }
-  ASSERT (lock_held_by_current_thread (&p->frame->lock));
-
-  /* Install frame into page table. */
-  success = pagedir_set_page (thread_current ()->pagedir, p->addr,
-                              p->frame->base, !p->read_only);
-
-  /* Release frame. */
-  frame_unlock (p->frame);
+  /*write codes here and you need to implement following functions*/
+  
 
   return success;
 }
 
+
+/*write codes here and you need to implement following functions*/
+
 /* Evicts page P.
    P must have a locked frame.
    Return true if successful, false on failure. */
+
+/*
+tips：要考虑dirty的情况写回
+并且要分情况讨论是写回交换区还是文件
+只有在p->private为false且对应一个file的时候才写回文件，否则利用swap写回交换区
+*/
 bool
 page_out (struct page *p)
 {
@@ -165,23 +147,13 @@ page_out (struct page *p)
     ok = true;
 
   //如果没有对应的file则需要写到交换区
-  if (p->file == NULL)
-	  ok = swap_out(p);
-  //如果对应一个file，则要根据是否private选择写回磁盘或者写入交换区
-  else
-  {
-	  if (dirty)
-	  {
-		  if (p->private)
-			  ok = swap_out(p);
-		  else
-			  ok = file_write_at(p->file, (const void*)p->frame->base, p->file_bytes, p->file_offset);
-	  }
-  }
-  if(ok)
-    p->frame = NULL;//表明这一个虚拟页不对应frame
+  /*write codes here and you need to implement following functions*/
 
-  return ok;
+
+  //如果对应一个file，则要根据是否private选择写回磁盘或者写入交换区
+  /*write codes here and you need to implement following functions*/
+ 
+  return true;//并非一定返回true，应该返回某个状态
 }
 
 /* Returns true if page P's data has been accessed recently,

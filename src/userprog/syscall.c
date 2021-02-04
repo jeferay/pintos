@@ -481,86 +481,33 @@ struct mapping
   };
 
 
-/* 取消映射关系，并且将相关的页面写回到文件之中去 */
+/*write codes here and you need to implement following functions*/
+/* 取消映射关系，并且将相关的页面写回到文件之中去 
+1.从list中剔除掉m
+2.考虑这组映射之中涉及到的每个虚拟页面
+3.通过查询该页面是否为dirty来决定是否写回，注意锁的问题
+4.最终释放相应的物理页面
+*/
 static void
 unmap (struct mapping *m)
 {
-  /* 移除掉这个mapping */
-  list_remove(&m->elem);
-
-  /*考虑这组映射之中涉及到的每个虚拟页面 */
-  int i = 0;
-  for(i = 0; i < m->page_cnt; i++)
-  {
-    /*通过查询该页面是否为dirty来决定是否写回，注意写回的时候要上锁 */
-    if (pagedir_is_dirty(thread_current()->pagedir, ((const void *) ((m->base) + (PGSIZE * i)))))
-    {
-      lock_acquire (&fs_lock);
-      file_write_at(m->file, (const void *) (m->base + (PGSIZE * i)), (PGSIZE*(m->page_cnt)), (PGSIZE * i));
-      lock_release (&fs_lock);
-    }
-  }
-
-  /* 最终释放相应的物理页面 */
-  for(i = 0; i < m->page_cnt; i++)
-  {
-    page_deallocate((void *) ((m->base) + (PGSIZE * i)));
-  }
+  
 }
 
+/*write codes here and you need to implement following functions*/
+
 /* Mmap system call. 构建映射关系 */
+/*
+1.根据handle查找到相应的fd
+2.开辟一块儿内存数组
+3.保存相应的mapping到thread的信息之中
+4.保存映射信息，但是暂时还不用复制文件内容
+5.return 一个映射号
+*/
 static int
 sys_mmap(int handle, void* addr)
 {
-	struct file_descriptor* fd = lookup_fd(handle);
-	struct mapping* m = malloc(sizeof * m);
-	size_t offset;
-	off_t length;
-
-	if (m == NULL || addr == NULL || pg_ofs(addr) != 0)
-		return -1;
-
-	m->handle = thread_current()->next_handle++;
-	lock_acquire(&fs_lock);
-	m->file = file_reopen(fd->file);
-	lock_release(&fs_lock);
-	if (m->file == NULL)
-	{
-		free(m);
-		return -1;
-	}
-	m->base = addr;
-	m->page_cnt = 0;
-	list_push_front(&thread_current()->mappings, &m->elem);
-
-	offset = 0;
-	lock_acquire(&fs_lock);
-	length = file_length(m->file);
-	lock_release(&fs_lock);
-
-	//到这里一部分是将相关的映射信息保存到m这个struct之中
-
-	//根据计算出来的file大小，分配对应数量的虚拟页面
-	//注意到此时只是分配了虚拟页面，并没有真正的allocate物理页面
-	//后续在发生page fault的时候才会实际的allocate相应的frame
-	while (length > 0)
-	{
-		struct page* p = page_allocate((uint8_t*)addr + offset, false);
-		if (p == NULL)
-		{
-			unmap(m);
-			return -1;
-		}
-		p->private = false;
-		p->file = m->file;
-		p->file_offset = offset;
-		p->file_bytes = length >= PGSIZE ? PGSIZE : length;
-		offset += p->file_bytes;
-		length -= p->file_bytes;
-		m->page_cnt++;
-	}
-
-	return m->handle;//返回一个映射号
+	return 0;
 }
 
 

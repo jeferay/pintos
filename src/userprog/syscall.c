@@ -470,7 +470,7 @@ sys_close (int handle)
 }
 
 
-/*为mapping构建一个结构体，记录映射关系，从内存到文件*/
+//为mapping构建一个结构体，记录映射关系，从内存到文件
 struct mapping
   {
     struct list_elem elem;      /* List element. */
@@ -512,7 +512,55 @@ unmap (struct mapping *m)
 static int
 sys_mmap(int handle, void* addr)
 {
-	return 0;
+	struct file_descriptor* fd = lookup_fd(handle);
+	struct mapping* m = malloc(sizeof * m);
+	size_t offset;
+	off_t length;
+
+	if (m == NULL || addr == NULL || pg_ofs(addr) != 0)
+		return -1;
+
+	m->handle = thread_current()->next_handle++;
+	lock_acquire(&fs_lock);
+	m->file = file_reopen(fd->file);
+	lock_release(&fs_lock);
+	if (m->file == NULL)
+	{
+		free(m);
+		return -1;
+	}
+	m->base = addr;
+	m->page_cnt = 0;
+	list_push_front(&thread_current()->mappings, &m->elem);
+
+	offset = 0;
+	lock_acquire(&fs_lock);
+	length = file_length(m->file);
+	lock_release(&fs_lock);
+
+	//到这里一部分是将相关的映射信息保存到m这个struct之中
+
+	//根据计算出来的file大小，分配对应数量的虚拟页面
+	//注意到此时只是分配了虚拟页面，并没有真正的allocate物理页面
+	//后续在发生page fault的时候才会实际的allocate相应的frame
+	while (length > 0)
+	{
+		struct page* p = page_allocate((uint8_t*)addr + offset, false);
+		if (p == NULL)
+		{
+			unmap(m);
+			return -1;
+		}
+		p->private = false;
+		p->file = m->file;
+		p->file_offset = offset;
+		p->file_bytes = length >= PGSIZE ? PGSIZE : length;
+		offset += p->file_bytes;
+		length -= p->file_bytes;
+		m->page_cnt++;
+	}
+
+	return m->handle;//返回一个映射号
 }
 
 
@@ -539,7 +587,8 @@ static int
 sys_munmap(int mapping)
 {
 	
-	
+	struct mapping* map = lookup_mapping(mapping);
+	unmap(map);
 	return 0;
 }
 
